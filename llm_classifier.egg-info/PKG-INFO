@@ -1,0 +1,120 @@
+Metadata-Version: 2.1
+Name: llm-classifier
+Version: 0.1
+Summary: LLM plugin for content classification using various language models
+Author-email: Your Name <you@example.com>
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/yourusername/llm-classifier
+Project-URL: Changelog, https://github.com/yourusername/llm-classifier/releases
+Project-URL: Issues, https://github.com/yourusername/llm-classifier/issues
+Classifier: License :: OSI Approved :: Apache Software License
+Description-Content-Type: text/markdown
+Requires-Dist: llm
+Requires-Dist: click
+
+# llm-classifier
+
+[![PyPI](https://img.shields.io/pypi/v/llm-classifier.svg)](https://pypi.org/project/llm-classifier/)
+[![Changelog](https://img.shields.io/github/v/release/yourusername/llm-classifier?include_prereleases&label=changelog)](https://github.com/yourusername/llm-classifier/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/yourusername/llm-classifier/blob/main/LICENSE)
+
+LLM plugin for content classification using various language models
+
+## Installation
+
+Install this plugin in the same environment as [LLM](https://llm.datasette.io/).
+
+```bash
+llm install llm-classifier
+```
+
+## Usage
+
+This plugin adds a new `classify` command to the LLM CLI. You can use it to classify content into predefined categories using various language models.
+
+Basic usage:
+
+```bash
+llm classify "This is a happy message" -c positive negative neutral -m gpt-3.5-turbo
+```
+
+Options:
+
+- `content`: The content(s) to classify. You can provide multiple items.
+- `-c, --classes`: Class options for classification (at least two required).
+- `-m, --model`: LLM model to use (default: gpt-3.5-turbo).
+- `-t, --temperature`: Temperature for API call (default: 0).
+- `-e, --examples`: Examples in the format 'content:class' (can be used multiple times).
+- `-p, --prompt`: Custom prompt template.
+- `--no-content`: Exclude content from the output.
+
+You can also pipe content to classify:
+
+```bash
+echo "This is exciting news!" | llm classify -c positive negative neutral
+```
+
+## Examples
+
+1. Basic classification:
+
+```bash
+llm classify "I love this product" "This is terrible" -c positive negative neutral
+```
+
+2. Using a custom model and temperature:
+
+```bash
+llm classify "The weather is nice today" -c good bad neutral -m gpt-4 -t 0.7
+```
+
+3. Providing examples for few-shot learning:
+
+```bash
+llm classify "The stock market crashed" -c economic political environmental \
+    -e "New trade deal signed:economic" "President gives speech:political" \
+    -e "Forest fires in California:environmental"
+```
+
+4. Using a custom prompt:
+
+```bash
+llm classify "Breaking news: Earthquake in Japan" -c urgent not-urgent \
+    -p "Classify the following news headline as either urgent or not-urgent:"
+```
+
+5. Classifying multiple items without content in output:
+
+```bash
+llm classify "Item 1" "Item 2" "Item 3" -c category1 category2 category3 --no-content
+```
+
+## Development
+
+To set up this plugin locally, first checkout the code. Then create a new virtual environment:
+
+```bash
+cd llm-classifier
+python -m venv venv
+source venv/bin/activate
+```
+
+Now install the dependencies and test dependencies:
+
+```bash
+llm install -e '.[test]'
+```
+
+To run the tests:
+
+```bash
+pytest
+```
+
+## Contributing
+
+Contributions to llm-classifier are welcome! Please refer to the [GitHub repository](https://github.com/yourusername/llm-classifier) for more information on how to contribute.
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

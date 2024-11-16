@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+llm_classify/__init__.py
+llm_classify.egg-info/PKG-INFO
+llm_classify.egg-info/SOURCES.txt
+llm_classify.egg-info/dependency_links.txt
+llm_classify.egg-info/entry_points.txt
+llm_classify.egg-info/requires.txt
+llm_classify.egg-info/top_level.txt
+tests/test_llm_classify.py

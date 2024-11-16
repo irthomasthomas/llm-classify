@@ -1,0 +1,28 @@
+[project]
+name = "llm-classify"
+version = "0.1"
+description = "LLM plugin for content classification using various language models"
+readme = "README.md"
+authors = [{name = "Thomas Thomas Hughes", email = "irthomasthomas@gmail.com"}]
+license = {text = "Apache-2.0"}
+classifiers = [
+    "License :: OSI Approved :: Apache Software License"
+]
+dependencies = [
+    "llm",
+    "click",
+]
+
+[project.urls]
+Homepage = "https://github.com/irthomasthomas/llm-classifier"
+Changelog = "https://github.com/irthomasthomas/llm-classifier/releases"
+Issues = "https://github.com/irthomasthomas/llm-classifier/issues"
+
+[project.entry-points.llm]
+classify = "llm_classify"
+
+[tool.pytest.ini_options]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.setuptools]
+packages = ["llm_classify"]
