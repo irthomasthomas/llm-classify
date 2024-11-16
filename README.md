@@ -1,14 +1,14 @@
-# llm-classifier
+# llm-classify
 
-[![PyPI](https://img.shields.io/pypi/v/llm-classifier.svg)](https://pypi.org/project/llm-classifier/)
-[![Changelog](https://img.shields.io/github/v/release/yourusername/llm-classifier?include_prereleases&label=changelog)](https://github.com/yourusername/llm-classifier/releases)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/yourusername/llm-classifier/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/llm-classify.svg)](https://pypi.org/project/llm-classify/)
+[![Changelog](https://img.shields.io/github/v/release/irthomasthomas/llm-classify?include_prereleases&label=changelog)](https://github.com/irthomasthomas/llm-classify/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/irthomasthomas/llm-classify/blob/main/LICENSE)
 
 LLM plugin for content classification using various language models
 
 ## Table of Contents
 
-- [llm-classifier](#llm-classifier)
+- [llm-classify](#llm-classify)
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
   - [Usage](#usage)
@@ -24,7 +24,7 @@ LLM plugin for content classification using various language models
 Install this plugin in the same environment as [LLM](https://llm.datasette.io/).
 
 ```bash
-llm install llm-classifier
+llm install llm-classify
 ```
 
 ## Usage
@@ -257,7 +257,7 @@ This is world news
 To set up this plugin locally, first checkout the code. Then create a new virtual environment:
 
 ```bash
-cd llm-classifier
+cd llm-classify
 python -m venv venv
 source venv/bin/activate
 ```
@@ -276,7 +276,7 @@ pytest
 
 ## Contributing
 
-Contributions to llm-classifier are welcome! Please refer to the [GitHub repository](https://github.com/yourusername/llm-classifier) for more information on how to contribute.
+Contributions to llm-classify are welcome! Please refer to the [GitHub repository](https://github.com/irthomasthomas/llm-classify) for more information on how to contribute.
 
 ## License
 
