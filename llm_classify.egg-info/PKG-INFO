@@ -4,9 +4,9 @@ Version: 0.1
 Summary: LLM plugin for content classification using various language models
 Author-email: Thomas Thomas Hughes <irthomasthomas@gmail.com>
 License: Apache-2.0
-Project-URL: Homepage, https://github.com/yourusername/llm-classifier
-Project-URL: Changelog, https://github.com/yourusername/llm-classifier/releases
-Project-URL: Issues, https://github.com/yourusername/llm-classifier/issues
+Project-URL: Homepage, https://github.com/irthomasthomas/llm-classifier
+Project-URL: Changelog, https://github.com/irthomasthomas/llm-classifier/releases
+Project-URL: Issues, https://github.com/irthomasthomas/llm-classifier/issues
 Classifier: License :: OSI Approved :: Apache Software License
 Description-Content-Type: text/markdown
 License-File: LICENSE
