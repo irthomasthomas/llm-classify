@@ -88,6 +88,44 @@ def classify_content(
         results.append(result)
     return results
 
+def _extract_completion_logprobs(response_json: dict) -> float:
+    """Extract logprobs from completion model response"""
+    if not response_json.get('logprobs'):
+        return 1.0
+    
+    total_logprob = 0.0
+    for token_info in response_json['logprobs']:
+        if token_info.get('top_logprobs'):
+            # Get the logprob of the actual token used
+            actual_token = token_info['text']
+            for option in token_info['top_logprobs'][0].keys():
+                if option.strip() == actual_token.strip():
+                    total_logprob += token_info['top_logprobs'][0][option]
+                    break
+    
+    return math.exp(total_logprob) if total_logprob != 0 else 1.0
+
+
+def _extract_chat_logprobs(response_json: dict) -> float:
+    """Extract logprobs from chat model response"""
+    if not response_json.get('logprobs'):
+        return 1.0
+    
+    total_logprob = 0.0
+    
+    if response_json['logprobs'][0].get('top_logprobs'):
+      # Get the logprob of the actual token used
+        total_logprob += response_json['logprobs'][0]['top_logprobs'][0].logprob
+    
+    return math.exp(total_logprob) if total_logprob != 0 else 0.0
+
+def _extract_chat_content(response_json: dict) -> str:
+    """Extract content from chat model response"""
+    if 'content' not in response_json:
+        raise ValueError("No content found in chat response")
+    return response_json['content'].strip()
+
+
 def get_class_probability(
     content: str,
     classes: List[str],
@@ -110,7 +148,7 @@ def get_class_probability(
 
 Here are the categories you can choose from:
 <CLASSES>
-{'\n'.join(classes)}
+{chr(10).join(classes)}
 </CLASSES>
 
 </INSTRUCTIONS>
@@ -130,26 +168,29 @@ Class: """
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = llm_model.prompt(prompt, temperature=temperature, logprobs=len(classes))
+            # Request logprobs from the model
+            response = llm_model.prompt(prompt, temperature=temperature, top_logprobs=1)
             
             db = sqlite_utils.Database(logs_db_path())
             response.log_to_db(db)
             
-            
-            generated_text = response.text().strip().lower()
-            total_logprob = 0.0
-            logprobs = response.response_json.get('logprobs', {})
-            
-            for token_info in logprobs['content']:
-                total_logprob += token_info.logprob
+            response_json = response.response_json
 
-            probability = math.exp(total_logprob)
+            if response_json.get("object") == "chat.completion.chunk":  # Chat model
+                if response_json.get('finish_reason') != 'stop':
+                    raise Exception(f"Chat model did not finish successfully, finish_reason={response_json.get('finish_reason')}")
+                
+                generated_text = _extract_chat_content(response_json).lower()
+                probability = _extract_chat_logprobs(response_json) 
+            else:  # Completion model
+                generated_text = response.text().strip().lower()
+                probability = _extract_completion_logprobs(response_json)
             
             # Ensure generated text matches one of the classes
             found_class = None
             for class_ in classes:
                 if class_.lower() == generated_text:
-                    found_class = generated_text
+                    found_class = class_  # Keep original case
                     break
             
             if found_class is None:
