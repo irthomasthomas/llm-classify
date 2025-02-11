@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: llm-classify
 Version: 0.1
 Summary: LLM plugin for content classification using various language models
