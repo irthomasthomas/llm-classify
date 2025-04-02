@@ -7,6 +7,9 @@ import math
 import time
 import sys
 import logging
+import string
+import re
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
 import sqlite_utils
@@ -36,47 +39,97 @@ def setup_database(db_path: pathlib.Path) -> sqlite_utils.Database:
             "class": str,
             "model": str,
             "temperature": float,
-            "timestamp": float,
-            "response_json": str
+            "datetime_utc": str,  # Human-readable timestamp in ISO format
+            "response_json": str,
+            "confidence": float
         }, pk="id")
+    else:
+        # Ensure columns exist in case of outdated schema
+        table = db["classifications"]
+        if "confidence" not in table.columns_dict:
+            table.add_column("confidence", float)
+        if "datetime_utc" not in table.columns_dict:
+            table.add_column("datetime_utc", str)
+        # Remove timestamp if exists (we're not concerned with backward compatibility)
+        if "timestamp" in table.columns_dict:
+            try:
+                db.execute("ALTER TABLE classifications DROP COLUMN timestamp")
+            except Exception as e:
+                logger.warning(f"Failed to drop timestamp column: {e}")
     
     return db
 
-def process_classification_response(response) -> Tuple[Optional[str], float]:
+def process_classification_response(response, classes: List[str]) -> Tuple[Optional[str], float]:
     try:
-        # Extract text and logprobs from response
-        text = response.response_json['content'].strip().lower()
-        logprobs_list = response.response_json['logprobs']['content']
+        response_text = (response.text() or "").strip().lower()
+        valid_letters = [chr(97+i) for i in range(min(len(classes), 26))]
         
-        # Calculate probability from logprob
-        total_logprob = sum(item.logprob for item in logprobs_list)
-        probability = math.exp(total_logprob)
+        # Find first valid letter using regex
+        match = re.search(rf'\b([{"".join(valid_letters)}])\b', response_text)
+        selected_letter = match.group(1) if match else None
         
-        return text, probability
+        if not selected_letter or selected_letter not in valid_letters:
+            return None, 0.0
+
+        confidence = 0.0
+        try:
+            response_json = response.json()
+            if 'logprobs' in response_json:
+                for token in response_json['logprobs']['content']:
+                    # Support both dict and object tokens
+                    token_value = token['token'] if isinstance(token, dict) else token.token
+                    token_logprob = token['logprob'] if isinstance(token, dict) else token.logprob
+                    if token_value.lower() == selected_letter:
+                        confidence = math.exp(token_logprob)
+                        break
+        except (AttributeError, KeyError, TypeError) as e:
+            logger.error(f"Logprob parsing error: {str(e)}")
+        
+        try:
+            class_index = ord(selected_letter) - 97
+            if 0 <= class_index < len(classes):
+                return classes[class_index], round(confidence, 4)
+        except IndexError:
+            pass
+            
+        return None, 0.0
+
     except Exception as e:
-        logger.error("Error processing response: %s", e)
+        logger.error(f"Classification error: {str(e)}")
         return None, 0.0
 
 def format_prompt(content: str, classes: Tuple[str], examples_list: Optional[List[Dict[str, str]]], custom_prompt: Optional[str]) -> str:
-    default_prompt = """
-<INSTRUCTIONS>
-Your task is to classify the given content into ONE of the provided categories. Respond with ONLY the category name.
+    # Assign letters to classes with validation
+    class_options = []
+    for i, cls in enumerate(classes):
+        if i >= 26:
+            logger.warning("Too many classes for letter mapping (>26)")
+            break
+        class_options.append(f"{chr(97+i)}) {cls}")
+    class_options_str = "\n".join(class_options)
+    
+    default_prompt = f"""<INSTRUCTIONS>
+Your task is to classify the content into ONE category using the letter corresponding to your choice.
 
-<CLASSES>
-{classes}
-</CLASSES>
+AVAILABLE CLASSES:
+{class_options_str}
 
-Content: {content} 
-Class:
-</INSTRUCTIONS>
-"""
+CONTENT TO CLASSIFY:
+{{content}}
+
+Respond ONLY with the single corresponding lowercase letter with no punctuation.</INSTRUCTIONS>"""
     prompt_template = custom_prompt or default_prompt
-    formatted_prompt = prompt_template.format(content=content, classes=", ".join(classes))
+    formatted_prompt = prompt_template.format(content=content)
+
     if examples_list:
-        formatted_prompt += "\nExamples:"
+        formatted_prompt += "\n\nEXAMPLES:"
         for example in examples_list:
-            formatted_prompt += f"\n  Content: {example['content']}\n  Class: {example['class']}"
-    formatted_prompt += f"\nInput: {content}\nClass:"
+            try:
+                example_idx = list(classes).index(example['class'])
+                example_letter = chr(97 + example_idx)
+                formatted_prompt += f"\nContent: {example['content']}\nResponse: {example_letter}"
+            except ValueError:
+                logger.warning(f"Skipping example with invalid class: {example['class']}")
     return formatted_prompt
 
 @llm.hookimpl
@@ -84,7 +137,7 @@ def register_commands(cli):
     @cli.command()
     @click.argument("content", type=str, required=False, nargs=-1)
     @click.option("-c", "--classes", required=True, multiple=True, help="Class options for classification")
-    @click.option("-m", "--model", default="gpt-3.5-turbo", help="LLM model to use")
+    @click.option("-m", "--model", default="gpt-4o-mini", help="LLM model to use")
     @click.option("-t", "--temperature", type=float, default=0, help="Temperature for API call")
     @click.option(
         "-e", "--examples", 
@@ -119,14 +172,13 @@ def register_commands(cli):
                     logger.warning("Skipping invalid example format: %s", example)
                     continue
         
-        db = setup_database(logs_db_path())
+        db = setup_database(llm.user_dir() / "logs.db")
     
         results = []
         for item in content:
             try:
                 formatted_prompt = format_prompt(item, classes, examples_list, prompt)
 
-                # Use the model's prompt method with the formatted string
                 response = llm.get_model(model).prompt(
                     formatted_prompt,
                     temperature=temperature,
@@ -134,30 +186,33 @@ def register_commands(cli):
                     max_tokens=1  # Add max_tokens limit
                 )
                 
-                # Force evaluation of the lazy response by converting it to a string.
                 evaluated_response = str(response)
 
-                # Now process the response using the already evaluated version.
-                result, probability = process_classification_response(response)
+                result, confidence = process_classification_response(response, list(classes))
                 
                 if result:
-                    # Convert response_json to serializable format
                     serializable_response = {}
-                    if hasattr(response, 'response_json'):
-                        serializable_response = _make_serializable(response.response_json)
+                    try:
+                        serializable_response = _make_serializable(response.json())
+                    except (AttributeError, TypeError):
+                        pass
+                    
+                    # Get current time in ISO format
+                    current_datetime_utc = datetime.utcnow().isoformat() + "+00:00"
                     
                     db["classifications"].insert({
                         "content": item if not no_content else "",
                         "class": result,
                         "model": model,
                         "temperature": temperature,
-                        "timestamp": time.time(),
-                        "response_json": json.dumps(serializable_response)
+                        "datetime_utc": current_datetime_utc,
+                        "response_json": json.dumps(serializable_response),
+                        "confidence": confidence
                     })
                     
                     result_dict = {
                         "class": result,
-                        "score": probability
+                        "confidence": confidence
                     }
                     if not no_content:
                         result_dict["content"] = item
@@ -180,12 +235,34 @@ def classify_content(
     custom_prompt: Optional[str] = None,
     no_content: bool = False
 ) -> List[Dict[str, Optional[str]]]:
+    # Create/setup the database
+    db = setup_database(llm.user_dir() / "logs.db")
+    
     results = []
     for item in content:
         winner, probability = get_class_probability(
             item, classes, model, temperature, examples, custom_prompt
         )
-        result = {"class": winner, "score": probability}
+        
+        # Get current time in ISO format
+        current_datetime_utc = datetime.utcnow().isoformat() + "+00:00"
+        
+        # Save to database
+        db["classifications"].insert({
+            "content": item if not no_content else "",
+            "class": winner,
+            "model": model,
+            "temperature": temperature,
+            "datetime_utc": current_datetime_utc,
+            "response_json": "{}",  # No response_json available here
+            "confidence": probability
+        })
+        
+        result = {
+            "class": winner, 
+            "score": probability,
+            "datetime_utc": current_datetime_utc
+        }
         if not no_content:
             result["content"] = item
         results.append(result)
@@ -293,16 +370,20 @@ def get_class_probability(
             top_logprobs=1
         )
         
-        if isinstance(response.response_json, dict):
-            if "choices" in response.response_json:
-                # Completion model
-                result = response.response_json["choices"][0]["text"].strip()
-                prob = _extract_completion_logprobs(response.response_json)
-            else:
-                # Chat model
-                result = response.response_json.get("content", "").strip()
-                prob = _extract_chat_logprobs(response.response_json)
-            return result, prob
+        try:
+            response_json = response.json()
+            if isinstance(response_json, dict):
+                if "choices" in response_json:
+                    # Completion model
+                    result = response_json["choices"][0]["text"].strip()
+                    prob = _extract_completion_logprobs(response_json)
+                else:
+                    # Chat model
+                    result = response_json.get("content", "").strip()
+                    prob = _extract_chat_logprobs(response_json)
+                return result, prob
+        except (AttributeError, TypeError):
+            pass
             
         return response.text().strip(), 1.0
         
@@ -310,17 +391,15 @@ def get_class_probability(
         logger.error("Classification error: %s", e)
         return "Error", 0.0
 
-def _make_serializable(obj):
-    """Convert response object to JSON serializable format"""
-    if isinstance(obj, dict):
-        return {k: _make_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_make_serializable(item) for item in obj]
-    elif hasattr(obj, 'model_dump'):
-        return obj.model_dump()
-    elif hasattr(obj, '__dict__'):
-        return _make_serializable(obj.__dict__)
-    return obj
+def _make_serializable(data):
+    if isinstance(data, dict):
+        return {k: _make_serializable(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_make_serializable(item) for item in data]
+    elif isinstance(data, (str, int, float, bool, type(None))):
+        return data
+    else:
+        return str(data)  # Convert non-serializable objects to string
 
 @llm.hookimpl
 def register_models(register):

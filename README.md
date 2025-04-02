@@ -15,6 +15,7 @@ LLM plugin for content classification using various language models
     - [Options](#options)
     - [Basic Examples](#basic-examples)
     - [Advanced Examples](#advanced-examples)
+  - [Python API](#python-api)
   - [Development](#development)
   - [Contributing](#contributing)
   - [License](#license)
@@ -250,6 +251,147 @@ fi
 ```
 ```
 This is world news
+```
+## Python API
+
+1.  **Automated Email Sorter with Confidence Threshold**
+
+Sort incoming emails into categories ("Urgent", "Work", "Personal", "Spam"), using a confidence threshold to automate moving emails or flagging them for review.
+
+```python
+from llm_classify import classify_content
+
+emails = [
+    "The server is down and needs immediate attention.",
+    "Meeting tomorrow at 2 PM.",
+    "Your package has been shipped.",
+    "Make money fast! Click here now."
+]
+classes = ["Urgent", "Work", "Personal", "Spam"]
+
+results = classify_content(emails, classes, model="gpt-4o-mini", temperature=0.7)
+
+for result in results:
+    if result["class"] == "Urgent" and result["confidence"] > 0.9:
+        print(f"Automatically moving: {result['content']} to Urgent folder")
+    elif result["class"] == "Spam" and result["confidence"] > 0.85:
+        print(f"Moving {result['content']} to Spam folder")
+    else:
+        print(f"Flagging {result['content']} for manual review")
+```
+
+2. **Shell Command Safety Interceptor**
+
+Classify shell commands based on safety, blocking potentially dangerous commands based on confidence.
+
+```python
+from llm_classify import classify_content
+
+dangerous_commands = ["rm -rf /", "chmod 777 /etc", "curl http://malicious"]
+
+results = classify_content(
+    dangerous_commands,
+    classes=["safe", "risky"],
+    model="claude-3.5-sonnet",
+    examples=[
+        "chmod 000 /etc/passwd:risky",
+        "ls -l:safe"
+    ],
+    custom_prompt="Classify command danger level considering system-wide impact:"
+)
+
+for cmd, result in zip(dangerous_commands, results):
+    if result['class'] == 'risky' and result.get('confidence', 0) > 0.85:
+        print(f"Blocking dangerous command: {cmd}")
+        # Add iptables rule to block origin IP
+    elif result['class'] == 'risky':
+        print(f"Flagging medium-risk command ({result['confidence']}): {cmd}")
+```
+
+3.  **System Log Anomaly Detection and Confidence-Based Alerting**
+
+Classify system log messages by severity to trigger alerts dynamically based on confidence levels.
+
+```python
+from llm_classify import classify_content
+
+log_messages = [
+    "INFO: User logged in successfully.",
+    "WARNING: Disk space nearing capacity.",
+    "ERROR: Database connection timeout.",
+    "CRITICAL: System core dump detected!"
+]
+classes = ["info", "warning", "error", "critical"]
+
+results = classify_content(log_messages, classes, model="gpt-4o-mini")
+
+for log, result in zip(log_messages, results):
+    confidence = result['confidence']
+    if result['class'] == 'critical' and confidence > 0.95:
+        print(f"CRITICAL ERROR: '{log}'. Triggering immediate escalation and system alert!")
+        # Trigger system-wide alert and escalation protocols
+    elif result['class'] == 'error' and confidence > 0.8:
+        print(f"ERROR: '{log}'. Sending notification to operations team.")
+        # Send notification to relevant team
+    elif result['class'] == 'warning' and confidence > 0.7:
+        print(f"WARNING: '{log}'. Logging for review.")
+        # Log warning for later review
+    else:
+        print(f"INFO: '{log}'. Standard logging.")
+        # Standard info logging
+```
+
+4. **AI Model Code Snippet Classification for Automated Code Review**
+
+Classify Python code snippets related to Machine Learning tasks. Confidence scores determine the level of automated code review applied.
+
+```python
+from llm_classify import classify_content
+
+code_snippets = [
+    "import pandas as pd\ndata = pd.read_csv('data.csv')",
+    "model = RandomForestClassifier()\nmodel.fit(X_train, y_train)",
+    "accuracy = accuracy_score(y_test, predictions)"
+]
+classes = ["data_loading", "model_training", "evaluation", "other"]
+
+results = classify_content(code_snippets, classes, model="gpt-4o-mini")
+
+for snippet, result in zip(code_snippets, results):
+    if result['class'] == 'data_loading' and result['confidence'] > 0.8:
+        print(f"Data Loading Snippet: '{snippet[:50]}...'. Initiating automated data quality checks.")
+        # Here, you'd trigger automated data validation scripts
+    elif result['confidence'] < 0.6:
+        print(f"Low confidence for: '{snippet[:50]}...'. Flagging for manual code review.")
+    else:
+        print(f"Snippet classified as '{result['class']}': '{snippet[:50]}...'. Proceeding with standard code review.")
+```
+
+5.  **Python Function Type Classification for Automated Documentation Generation**
+
+Classify Python functions based on their purpose to automate documentation generation. Confidence guides the automation level: high confidence triggers auto-documentation; low confidence prompts manual documentation.
+
+```python
+from llm_classify import classify_content
+
+functions = [
+    """def calculate_average(data_list): return sum(data_list) / len(data_list)""",
+    """def fetch_user_profile(user_id): api_call('/users/' + user_id)""",
+    """def render_ui_button(text, onclick_action): # UI rendering logic here""",
+    """def _internal_utility_function(param): # ... """
+]
+classes = ["data_processing", "api_interaction", "ui_rendering", "utility", "unknown"]
+
+results = classify_content(functions, classes, model="gpt-4o-mini")
+
+for function_code, result in zip(functions, results):
+    confidence = result['confidence']
+    if result['class'] in ['data_processing', 'utility'] and confidence > 0.85:
+        print(f"Function classified as '{result['class']}': '{function_code[:50]}...'. Auto-generating documentation.")
+    elif confidence < 0.7:
+        print(f"Unclear function type for: '{function_code[:50]}...'. Manual documentation recommended.")
+    else:
+        print(f"Function classified as '{result['class']}': '{function_code[:50]}...'. Standard documentation workflow.")
 ```
 
 ## Development
